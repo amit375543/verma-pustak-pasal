@@ -1,3 +1,4 @@
+import certifi 
 import os
 from flask import Flask, render_template_string, request, redirect, url_for, session, flash
 from pymongo import MongoClient
@@ -5,7 +6,7 @@ from datetime import datetime
 from bson.objectid import ObjectId
 import cloudinary
 import cloudinary.uploader
-
+from pymongo import MongoClient
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "verma_pustak_2071_ultra")
 
@@ -16,14 +17,20 @@ cloudinary.config(
     api_secret = os.environ.get("CLOUDINARY_API_SECRET")
 )
 
+# --- DATABASE CONNECTION ---
 mongo_uri = os.environ.get("MONGO_URI")
-# Added connect=False and a shorter timeout to save memory
+
+# Use certifi to find the correct system CA certificates for SSL
+ca = certifi.where()
+
 client = MongoClient(
     mongo_uri, 
+    tlsCAFile=ca, # Use the certificate file
     tlsAllowInvalidCertificates=True, 
     connect=False, 
     serverSelectionTimeoutMS=5000
 )
+
 db = client['verma_pustak_db']
 
 # Collections
