@@ -1,5 +1,5 @@
-Flask
-gunicorn
-Werkzeug
+flask
 pymongo
 dnspython
+cloudinary
+gunicorn
