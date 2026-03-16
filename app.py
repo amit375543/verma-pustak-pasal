@@ -17,7 +17,13 @@ cloudinary.config(
 )
 
 mongo_uri = os.environ.get("MONGO_URI")
-client = MongoClient(mongo_uri, tlsAllowInvalidCertificates=True)
+# Added connect=False and a shorter timeout to save memory
+client = MongoClient(
+    mongo_uri, 
+    tlsAllowInvalidCertificates=True, 
+    connect=False, 
+    serverSelectionTimeoutMS=5000
+)
 db = client['verma_pustak_db']
 
 # Collections
