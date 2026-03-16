@@ -17,7 +17,7 @@ cloudinary.config(
 )
 
 mongo_uri = os.environ.get("MONGO_URI")
-client = MongoClient(mongo_uri)
+client = MongoClient(mongo_uri, tlsAllowInvalidCertificates=True)
 db = client['verma_pustak_db']
 
 # Collections
