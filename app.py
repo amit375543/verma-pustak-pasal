@@ -1,33 +1,27 @@
 import os
-import certifi
+import certifi # Ensure this is in your requirements.txt
 from flask import Flask
 from pymongo import MongoClient
 
 app = Flask(__name__)
 
-# --- MINIMAL DATABASE TEST ---
-try:
-    # 1. Initialize SSL Certificate
-    ca = certifi.where()
+# --- FIX START ---
+# Define 'ca' BEFORE initializing the MongoClient
+ca = certifi.where() 
 
-    # 2. Connection Logic
-    mongo_uri = os.environ.get("MONGO_URI")
-    client = MongoClient(
-        mongo_uri, 
-        tlsCAFile=ca, 
-        tlsAllowInvalidCertificates=True, 
-        serverSelectionTimeoutMS=5000
-    )
-    
-    # Trigger a quick connection test
-    client.admin.command('ping')
-    db_status = "Successfully connected to MongoDB!"
-except Exception as e:
-    db_status = f"Database Connection Failed: {str(e)}"
+mongo_uri = os.environ.get("MONGO_URI")
+client = MongoClient(
+    mongo_uri, 
+    tlsCAFile=ca, 
+    tlsAllowInvalidCertificates=True, 
+    connect=False
+)
+db = client['verma_pustak_db']
+# --- FIX END ---
 
 @app.route('/')
 def home():
-    return f"<h1>Verma Pustak Pasal Test Page</h1><p>Status: {db_status}</p>"
+    return "<h1>Verma Pustak Pasal is Live!</h1>"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
