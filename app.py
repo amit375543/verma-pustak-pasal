@@ -21,14 +21,17 @@ cloudinary.config(
 mongo_uri = os.environ.get("MONGO_URI")
 
 # Use certifi to find the correct system CA certificates for SSL
-ca = certifi.where()
+cca = certifi.where()
 
 client = MongoClient(
-    mongo_uri, 
-    tlsCAFile=ca, # Use the certificate file
-    tlsAllowInvalidCertificates=True, 
-    connect=False, 
-    serverSelectionTimeoutMS=5000
+    os.environ.get("MONGO_URI"),
+    tlsCAFile=ca,
+    # This specifically helps with the handshake error
+    tlsAllowInvalidCertificates=True,
+    # Lowers memory and prevents "spinning" on start
+    connect=False,
+    serverSelectionTimeoutMS=5000,
+    socketTimeoutMS=5000
 )
 
 db = client['verma_pustak_db']
