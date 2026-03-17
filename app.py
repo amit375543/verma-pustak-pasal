@@ -8,24 +8,21 @@ import cloudinary
 import cloudinary.uploader
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "verma_pustak_2026_final_fix")
+app.secret_key = os.environ.get("SECRET_KEY", "verma_pustak_2026_pro_stable")
 
-# --- DATABASE CONNECTION ---
-ca = certifi.where()
-client = MongoClient(
-    os.environ.get("MONGO_URI"),
-    tlsCAFile=ca,
-    tlsAllowInvalidCertificates=True,
-    connect=False,
-    serverSelectionTimeoutMS=5000
-)
-db = client['verma_pustak_db']
-inventory_col = db.get_collection('inventory')
-reviews_col = db.get_collection('reviews')
-leads_col = db.get_collection('leads')
-settings_col = db.get_collection('settings')
+# --- OPTIMIZED CONNECTION (Lazy Loading) ---
+def get_db():
+    ca = certifi.where()
+    client = MongoClient(
+        os.environ.get("MONGO_URI"),
+        tlsCAFile=ca,
+        tlsAllowInvalidCertificates=True,
+        connect=False,  # Important: Prevents hanging at startup
+        serverSelectionTimeoutMS=5000  # Give up fast if DB is slow
+    )
+    return client['verma_pustak_db']
 
-# --- CLOUDINARY CONFIG ---
+# --- CLOUDINARY ---
 cloudinary.config(
     cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"),
     api_key = os.environ.get("CLOUDINARY_API_KEY"),
@@ -35,94 +32,78 @@ cloudinary.config(
 ADMIN_PASSWORD = "verma@123"
 
 def get_settings():
+    db = get_db()
     default = {
-        "type": "general",
         "shop_name": "Verma Pustak Pasal",
         "phone": "9847299546",
-        "announcement": "📢 Welcome to Verma Pustak Pasal!",
-        "map_html": "Map will appear after you update it in Admin.",
+        "announcement": "📢 Quality you can trust!",
+        "map_html": "Map loading...",
         "logo_url": "https://via.placeholder.com/150",
         "group_link": "#"
     }
     try:
-        s = settings_col.find_one({"type": "general"})
-        if not s:
-            settings_col.insert_one(default)
-            return default
-        return s
+        s = db.settings.find_one({"type": "general"})
+        return s if s else default
     except:
         return default
 
-# --- STYLING ---
+# --- MINIMAL FAST UI ---
 SITE_CSS = '''
 <style>
-    :root { --p: #2c3e50; --s: #25d366; --bg: #f8fafd; --card: #fff; --text: #333; }
-    body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; }
-    .announcement { background: var(--s); color: white; padding: 12px; text-align: center; font-weight: bold; }
-    .header { background: var(--p); color: white; padding: 30px; text-align: center; }
-    .section-card { background: var(--card); border-radius: 12px; padding: 25px; margin: 20px auto; max-width: 800px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .prod-card { background: var(--card); border-radius: 10px; padding: 15px; text-align: center; border: 1px solid rgba(0,0,0,0.05); margin-bottom: 20px; }
+    :root { --p: #2c3e50; --s: #25d366; --bg: #f8fafd; }
+    body { background: var(--bg); font-family: sans-serif; margin: 0; color: #333; }
+    .nav { background: var(--p); color: white; padding: 25px; text-align: center; }
+    .announcement { background: var(--s); color: white; padding: 10px; text-align: center; font-weight: bold; }
+    .card { background: white; border-radius: 8px; padding: 15px; margin: 15px auto; max-width: 800px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .btn { background: var(--p); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; text-decoration: none; }
+    .wa-btn { background: var(--s); color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; display: inline-block; }
 </style>
 '''
 
 @app.route('/')
 def home():
+    db = get_db()
     settings = get_settings()
     try:
-        inventory = list(inventory_col.find().sort("date_added", -1))
-        reviews = list(reviews_col.find().sort("date", -1).limit(5))
+        inventory = list(db.inventory.find().sort("date_added", -1).limit(20))
     except:
-        inventory, reviews = [], []
+        inventory = []
 
     items_html = "".join([f'''
-        <div style="width: 30%; display: inline-block; vertical-align: top; padding: 10px;">
-            <div class="prod-card shadow-sm">
-                <img src="{p.get('img', '')}" style="height:150px; object-fit:contain; width:100%;">
-                <h5 class="mt-2">{p.get('name', 'Book')}</h5>
-                <p class="text-success fw-bold">Rs. {p.get('price', '0')}</p>
-                <a href="https://wa.me/{settings['phone']}?text=I want to order {p.get('name')}" style="background:#25d366; color:white; padding:5px 10px; text-decoration:none; border-radius:5px;">Order</a>
+        <div style="width: 30%; display: inline-block; vertical-align: top; padding: 10px; min-width: 250px;">
+            <div class="card" style="text-align: center;">
+                <img src="{p.get('img','')}" style="height:150px; object-fit:contain; width:100%;">
+                <h4>{p.get('name','Book')}</h4>
+                <p style="color:green; font-weight:bold;">Rs. {p.get('price','0')}</p>
+                <a href="https://wa.me/{settings['phone']}" class="wa-btn">Order on WhatsApp</a>
             </div>
         </div>''' for p in inventory])
 
-    rev_html = "".join([f'<div style="border-bottom:1px solid #ddd; padding:5px;"><strong>{r.get("name", "User")}</strong>: {r.get("msg", "")}</div>' for r in reviews])
-
     return render_template_string(f'''
     <!DOCTYPE html>
-    <html lang="en">
-    <head><meta name="viewport" content="width=device-width, initial-scale=1"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">{SITE_CSS}</head>
+    <html>
+    <head><meta name="viewport" content="width=device-width, initial-scale=1">{SITE_CSS}</head>
     <body>
-        <div class="announcement">{settings.get('announcement')}</div>
-        <header class="header">
-            <h1>{settings.get('shop_name')}</h1>
-            <p>Ramgram-3, Parasi | 📞 {settings.get('phone')}</p>
-        </header>
-        <div class="container" style="padding: 20px; text-align: center;">
-            <div class="section-card">
+        <div class="announcement">{settings['announcement']}</div>
+        <div class="nav">
+            <h1>{settings['shop_name']}</h1>
+            <p>Parasi, Nepal | {settings['phone']}</p>
+        </div>
+        <div style="padding: 20px; text-align: center;">
+            <div class="card">
                 <form action="/subscribe" method="POST">
                     <input name="p" placeholder="WhatsApp Number" required style="padding:10px; width:60%;">
-                    <button type="submit" style="padding:10px; background:#2c3e50; color:white;">JOIN GROUP</button>
+                    <button class="btn">JOIN GROUP</button>
                 </form>
             </div>
-            <div style="max-width: 1000px; margin: auto;">{items_html if items_html else "<p>No products yet. Use /admin to add them!</p>"}</div>
-            
-            <div style="margin-top:50px; display:flex; text-align:left; flex-wrap: wrap;">
-                <div style="flex:1; min-width:300px; padding:20px;">
-                    <h4>Location 📍</h4>
-                    <div style="border:1px solid #ddd;">{settings.get('map_html')}</div>
-                </div>
-                <div style="flex:1; min-width:300px; padding:20px;">
-                    <h4>Customer Reviews</h4>
-                    <div style="margin-bottom:20px;">{rev_html if rev_html else "No reviews yet."}</div>
-                    <form action="/submit-review" method="POST" class="border p-2">
-                        <input name="rev_name" placeholder="Name" required class="form-control mb-1">
-                        <textarea name="rev_msg" placeholder="Review" required class="form-control mb-1"></textarea>
-                        <button type="submit" class="btn btn-dark btn-sm">Post</button>
-                    </form>
-                </div>
+            {items_html if items_html else "<p>Welcome! Add products in /admin.</p>"}
+            <div class="card" style="text-align:left;">
+                <h4>Our Location</h4>
+                {settings['map_html']}
             </div>
         </div>
-        <footer style="text-align:center; padding:20px; background:#2c3e50; color:white; margin-top:50px;">
-            <p>© 2026 {settings.get('shop_name')} | <a href="/admin" style="color:white;">Admin Login</a></p>
+        <footer style="text-align:center; padding:30px; background:#eee;">
+            <a href="/admin">Admin Login</a>
         </footer>
     </body>
     </html>
@@ -134,46 +115,35 @@ def admin():
         if request.method == 'POST' and request.form.get('password') == ADMIN_PASSWORD:
             session['logged_in'] = True
             return redirect(url_for('admin'))
-        return '<div style="text-align:center; margin-top:100px;"><form method="POST"><h2>Admin Access</h2><input type="password" name="password" style="padding:10px;"><button style="padding:10px;">Login</button></form></div>'
+        return '<div style="text-align:center; margin-top:100px;"><form method="POST"><h2>Admin</h2><input type="password" name="password"><button>Login</button></form></div>'
     
     settings = get_settings()
-    leads = list(leads_col.find().sort("date", -1))
-    lead_rows = "".join([f"<tr><td>{l.get('phone')}</td><td>{l.get('date').strftime('%Y-%m-%d')}</td></tr>" for l in leads])
-
     return render_template_string(f'''
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <div class="container py-4">
+    <div style="max-width:800px; margin:auto; padding:20px; font-family:sans-serif;">
         <h2>Admin Dashboard</h2><a href="/logout">Logout</a><hr>
-        <div class="row">
-            <div class="col-md-6 border-end">
-                <h4>Shop Settings</h4>
-                <form action="/update-settings" method="POST">
-                    <label>Shop Name</label><input name="shop_name" value="{settings.get('shop_name')}" class="form-control mb-2">
-                    <label>WhatsApp</label><input name="phone" value="{settings.get('phone')}" class="form-control mb-2">
-                    <label>Announcement</label><textarea name="announcement" class="form-control mb-2">{settings.get('announcement')}</textarea>
-                    <label>Map HTML</label><textarea name="map_html" class="form-control mb-2">{settings.get('map_html')}</textarea>
-                    <button class="btn btn-success w-100">Update Shop</button>
-                </form>
-            </div>
-            <div class="col-md-6">
-                <h4>Add Product</h4>
-                <form action="/add-product" method="POST" enctype="multipart/form-data">
-                    <input name="n" placeholder="Book Name" class="form-control mb-2" required>
-                    <input name="p" placeholder="Price" class="form-control mb-2" required>
-                    <input type="file" name="file" class="form-control mb-2" required>
-                    <button class="btn btn-primary w-100">Add to Stock</button>
-                </form>
-                <h4 class="mt-4">WhatsApp Leads</h4>
-                <table class="table table-sm"><tr><th>Phone</th><th>Date</th></tr>{lead_rows}</table>
-            </div>
-        </div>
+        <form action="/update-settings" method="POST" style="margin-bottom:30px;">
+            <h3>Shop Settings</h3>
+            Name: <input name="shop_name" value="{settings['shop_name']}" style="width:100%;"><br><br>
+            Phone: <input name="phone" value="{settings['phone']}" style="width:100%;"><br><br>
+            Notice: <textarea name="announcement" style="width:100%;">{settings['announcement']}</textarea><br><br>
+            Map Embed: <textarea name="map_html" style="width:100%;">{settings['map_html']}</textarea><br><br>
+            <button class="btn" style="background:green;">Update Shop</button>
+        </form>
+        <form action="/add-product" method="POST" enctype="multipart/form-data">
+            <h3>Add Book</h3>
+            Name: <input name="n" required style="width:100%;"><br><br>
+            Price: <input name="p" required style="width:100%;"><br><br>
+            Image: <input type="file" name="file" required style="width:100%;"><br><br>
+            <button class="btn" style="background:blue;">Upload Book</button>
+        </form>
     </div>
     ''')
 
 @app.route('/update-settings', methods=['POST'])
 def update_settings():
     if not session.get('logged_in'): return redirect(url_for('admin'))
-    settings_col.update_one({"type": "general"}, {"$set": {
+    db = get_db()
+    db.settings.update_one({"type": "general"}, {"$set": {
         "shop_name": request.form.get('shop_name'),
         "phone": request.form.get('phone'),
         "announcement": request.form.get('announcement'),
@@ -184,20 +154,20 @@ def update_settings():
 @app.route('/add-product', methods=['POST'])
 def add_product():
     if not session.get('logged_in'): return redirect(url_for('admin'))
-    try:
-        res = cloudinary.uploader.upload(request.files['file'])
-        inventory_col.insert_one({"name": request.form.get('n'), "price": request.form.get('p'), "img": res['secure_url'], "date_added": datetime.now()})
-    except: pass
+    db = get_db()
+    res = cloudinary.uploader.upload(request.files['file'])
+    db.inventory.insert_one({
+        "name": request.form.get('n'),
+        "price": request.form.get('p'),
+        "img": res['secure_url'],
+        "date_added": datetime.now()
+    })
     return redirect(url_for('admin'))
-
-@app.route('/submit-review', methods=['POST'])
-def submit_review():
-    reviews_col.insert_one({"name": request.form.get('rev_name'), "msg": request.form.get('rev_msg'), "date": datetime.now()})
-    return redirect("/")
 
 @app.route('/subscribe', methods=['POST'])
 def subscribe():
-    leads_col.insert_one({"phone": request.form.get('p'), "date": datetime.now()})
+    db = get_db()
+    db.leads.insert_one({"phone": request.form.get('p'), "date": datetime.now()})
     return redirect("/")
 
 @app.route('/logout')
