@@ -20,7 +20,6 @@ client = MongoClient(
     serverSelectionTimeoutMS=5000
 )
 db = client['verma_pustak_db']
-# We use .get_collection to prevent crashes if they don't exist yet
 inventory_col = db.get_collection('inventory')
 reviews_col = db.get_collection('reviews')
 leads_col = db.get_collection('leads')
@@ -48,12 +47,20 @@ def get_settings():
     try:
         s = settings_col.find_one({"type": "general"})
         if s:
-            return s
+            # We don't need to pop the _id, we just return the specific keys
+            return {
+                "shop_name": s.get("shop_name", default["shop_name"]),
+                "phone": s.get("phone", default["phone"]),
+                "announcement": s.get("announcement", default["announcement"]),
+                "map_html": s.get("map_html", default["map_html"]),
+                "logo_url": s.get("logo_url", default["logo_url"]),
+                "group_link": s.get("group_link", default["group_link"])
+            }
     except:
         pass
     return default
 
-# --- ALL FEATURES UI ---
+# --- UI STYLES ---
 SITE_CSS = '''
 <style>
     :root { --p: #2c3e50; --s: #25d366; --bg: #f8fafd; --card: #fff; --text: #333; }
@@ -63,7 +70,6 @@ SITE_CSS = '''
     .header { background: var(--p); color: white; padding: 30px; text-align: center; }
     .section-card { background: var(--card); border-radius: 12px; padding: 20px; margin: 20px auto; max-width: 800px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     .prod-card { background: var(--card); border-radius: 10px; padding: 15px; text-align: center; border: 1px solid rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .theme-toggle { position: fixed; top: 10px; right: 10px; z-index: 1000; cursor: pointer; }
 </style>
 '''
 
@@ -71,8 +77,7 @@ SITE_CSS = '''
 def home():
     settings = get_settings()
     inventory = list(inventory_col.find().sort("date_added", -1))
-    reviews = list(reviews_col.find().sort("date", -1).limit(5))
-
+    
     items_html = "".join([f'''
         <div class="col-md-4">
             <div class="prod-card">
@@ -85,10 +90,9 @@ def home():
 
     return render_template_string(f'''
     <!DOCTYPE html>
-    <html lang="en" data-theme="light">
+    <html lang="en">
     <head><meta name="viewport" content="width=device-width, initial-scale=1"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">{SITE_CSS}</head>
     <body>
-        <button class="theme-toggle btn btn-sm btn-light" onclick="toggleTheme()">🌓 Theme</button>
         <div class="announcement">{settings['announcement']}</div>
         <header class="header">
             <h1>{settings['shop_name']}</h1>
@@ -106,15 +110,6 @@ def home():
         <footer class="text-center p-4 mt-4 bg-dark text-white">
             <p>© 2026 {settings['shop_name']} | <a href="/admin" class="text-white">Admin Login</a></p>
         </footer>
-        <script>
-            function toggleTheme() {{
-                const b = document.documentElement;
-                const t = b.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-                b.setAttribute('data-theme', t);
-                localStorage.setItem('theme', t);
-            }}
-            document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
-        </script>
     </body>
     </html>
     ''')
@@ -125,11 +120,9 @@ def admin():
         if request.method == 'POST' and request.form.get('password') == ADMIN_PASSWORD:
             session['logged_in'] = True
             return redirect(url_for('admin'))
-        return '<div style="text-align:center; margin-top:100px;"><form method="POST"><h2>Admin</h2><input type="password" name="password"><button>Login</button></form></div>'
+        return '<div style="text-align:center; margin-top:100px;"><form method="POST"><h2>Admin Access</h2><input type="password" name="password"><button>Login</button></form></div>'
     
     settings = get_settings()
-    inventory = list(inventory_col.find())
-    
     return render_template_string(f'''
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <div class="container mt-4">
